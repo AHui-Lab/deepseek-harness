@@ -1,25 +1,38 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const log = require('electron-log');
 const https = require('https');
+
+// ─── Simple Logger (no external deps) ────────────────────────────────────
+
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
+const LOG_FILE = path.join(LOG_DIR, 'dsh-desktop.log');
+
+function writeLog(level, ...args) {
+  const ts = new Date().toISOString();
+  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const line = `[${ts}] [${level}] ${msg}\n`;
+  try { fs.appendFileSync(LOG_FILE, line); } catch {}
+  console[level === 'error' ? 'error' : 'log'](line.trim());
+}
+const log = {
+  info: (...a) => writeLog('info', ...a),
+  warn: (...a) => writeLog('warn', ...a),
+  error: (...a) => writeLog('error', ...a),
+};
 
 // ─── Config ──────────────────────────────────────────────────────────────
 
 const APP_VERSION = '1.0.0';
 const DSH_PACKAGE = '@deepseek-ai/dsh';
 const DEFAULT_PORT = 3080;
-const SERVER_TIMEOUT = 45000; // 45s max wait for server
+const SERVER_TIMEOUT = 45000;
 
-// Upstream to track for updates
 const UPSTREAM_OWNER = 'deepseek-ai';
 const UPSTREAM_REPO = 'deepseek-harness';
-
-// Configure logging
-log.transports.file.level = 'info';
-log.transports.console.level = 'debug';
 
 // Global state
 let mainWindow = null;
@@ -33,26 +46,21 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 // ─── Paths ───────────────────────────────────────────────────────────────
 
 function getAssetPath(name) {
-  if (isDev) {
-    return path.join(__dirname, '..', 'assets', name);
-  }
+  if (isDev) return path.join(__dirname, '..', 'assets', name);
   return path.join(process.resourcesPath, 'assets', name);
 }
 
 // ─── Window ──────────────────────────────────────────────────────────────
 
 function createWindow() {
-  if (mainWindow) {
-    mainWindow.focus();
-    return;
-  }
+  if (mainWindow) { mainWindow.focus(); return; }
 
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 640,
-    title: `DeepSeek Harness Desktop`,
+    title: 'DeepSeek Harness Desktop',
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -63,20 +71,12 @@ function createWindow() {
     icon: getAssetPath('icon.png'),
   });
 
-  // Load splash screen first
   mainWindow.loadFile(path.join(__dirname, 'splash.html')).catch(() => {});
 
-  mainWindow.once('ready-to-show', () => {
-    if (serverReady) mainWindow.show();
-  });
-
+  mainWindow.once('ready-to-show', () => { if (serverReady) mainWindow.show(); });
   mainWindow.on('closed', () => { mainWindow = null; });
-
   mainWindow.on('close', (event) => {
-    if (process.platform === 'darwin') {
-      event.preventDefault();
-      mainWindow.hide();
-    }
+    if (process.platform === 'darwin') { event.preventDefault(); mainWindow.hide(); }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -84,9 +84,7 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  if (isDev) mainWindow.webContents.openDevTools();
 }
 
 // ─── Tray ─────────────────────────────────────────────────────────────────
@@ -107,33 +105,23 @@ function createTray() {
     { type: 'separator' },
     { label: `Launcher v${APP_VERSION}`, enabled: false },
     { type: 'separator' },
-    {
-      label: 'Check for Updates',
-      click: () => performUpdateCheck(true),
-    },
+    { label: 'Check for Updates', click: () => performUpdateCheck(true) },
     { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => quitApp(),
-    },
+    { label: 'Quit', click: () => quitApp() },
   ]);
 
   tray.setContextMenu(contextMenu);
   tray.on('click', () => {
-    if (mainWindow) {
-      mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
-    } else {
-      createWindow();
-    }
+    if (mainWindow) { mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show(); }
+    else { createWindow(); }
   });
 }
 
 // ─── DSH Server ───────────────────────────────────────────────────────────
 
 function findNodeExecutable() {
-  // Try common paths
   const candidates = [
-    process.execPath, // bundled node
+    process.execPath,
     'node',
     'node.exe',
     path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
@@ -146,7 +134,6 @@ function findNodeExecutable() {
   for (const cmd of candidates) {
     try {
       if (cmd === 'node' || cmd === 'node.exe') {
-        // Use execSync to check
         const result = require('child_process').execSync(`${cmd} --version`, { encoding: 'utf8', timeout: 3000 });
         if (result.startsWith('v')) return cmd;
       } else if (fs.existsSync(cmd)) {
@@ -168,25 +155,17 @@ function findNpx() {
   if (fs.existsSync(npxPath)) return npxPath;
   if (fs.existsSync(npxPath2)) return npxPath2;
 
-  // Fallback: try global npx
   try {
     require('child_process').execSync('npx --version', { encoding: 'utf8', timeout: 3000 });
     return 'npx';
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function checkDshInstalled() {
   return new Promise((resolve) => {
     const nodePath = findNodeExecutable();
     if (!nodePath) { resolve(false); return; }
-
-    const check = spawn(nodePath, ['-e', `require.resolve('${DSH_PACKAGE}/package.json')`], {
-      shell: true,
-      stdio: 'pipe',
-    });
-
+    const check = spawn(nodePath, ['-e', `require.resolve('${DSH_PACKAGE}/package.json')`], { shell: true, stdio: 'pipe' });
     check.on('exit', (code) => resolve(code === 0));
     check.on('error', () => resolve(false));
   });
@@ -265,10 +244,10 @@ function startDshServer() {
 
     dshProcess.on('exit', (code) => {
       log.info(`DSH exited with code ${code}`);
-      dshProcess = null; serverReady = false;
+      dshProcess = null;
+      serverReady = false;
     });
 
-    // Fallback after 12s
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -430,7 +409,6 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
 
-  // Check Node.js availability
   const nodePath = findNodeExecutable();
   if (!nodePath) {
     log.error('Node.js not found');
@@ -461,7 +439,6 @@ app.whenReady().then(async () => {
     if (mainWindow) mainWindow.webContents.send('server-error', err.message);
   }
 
-  // Update checks
   setTimeout(() => performUpdateCheck(), 15000);
   setInterval(() => performUpdateCheck(), 24 * 60 * 60 * 1000);
 });
