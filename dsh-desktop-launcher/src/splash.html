@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>DeepSeek Harness Desktop</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 50%, #415a77 100%);
+      color: #fff; height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; overflow: hidden;
+    }
+    .container { text-align: center; max-width: 520px; padding: 2rem; }
+    .logo {
+      width: 90px; height: 90px; margin: 0 auto 2rem;
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      border-radius: 22px; display: flex; align-items: center; justify-content: center;
+      font-size: 40px; font-weight: 800; box-shadow: 0 10px 40px rgba(0,180,216,0.35);
+      color: #fff;
+    }
+    h1 { font-size: 2.1rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .subtitle { color: rgba(255,255,255,0.55); font-size: 0.95rem; margin-bottom: 2.5rem; }
+    .spinner {
+      width: 42px; height: 42px; border: 3px solid rgba(255,255,255,0.08);
+      border-top-color: #00b4d8; border-radius: 50%;
+      animation: spin 1s linear infinite; margin: 0 auto 1.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status { color: rgba(255,255,255,0.6); font-size: 0.9rem; line-height: 1.6; }
+    .version { position: absolute; bottom: 1.2rem; color: rgba(255,255,255,0.3); font-size: 0.75rem; }
+    .error-box {
+      display: none; background: rgba(239,83,80,0.12);
+      border: 1px solid rgba(239,83,80,0.25); border-radius: 10px;
+      padding: 1rem; margin-top: 1.5rem; color: #ff8a80; font-size: 0.85rem; line-height: 1.5;
+    }
+    .error-box.visible { display: block; }
+    .node-hint {
+      margin-top: 0.8rem; font-size: 0.8rem; color: rgba(255,255,255,0.4);
+    }
+    .node-hint a { color: #4fc3f7; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">DS</div>
+    <h1>DeepSeek Harness</h1>
+    <p class="subtitle">AI-powered development environment</p>
+    <div class="spinner"></div>
+    <p class="status" id="status">正在启动本地服务...</p>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+  <div class="version" id="version"></div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const versionEl = document.getElementById('version');
+    const errorBox = document.getElementById('errorBox');
+
+    const msgs = [
+      '正在启动本地服务...',
+      '正在加载插件...',
+      '正在初始化工作区...',
+      '正在准备界面...',
+    ];
+    let i = 0;
+    const iv = setInterval(() => { i = (i+1)%msgs.length; statusEl.textContent = msgs[i]; }, 2500);
+
+    if (window.dshDesktop) {
+      window.dshDesktop.getAppVersion().then(v => { versionEl.textContent = 'Launcher v' + v; });
+      window.dshDesktop.onServerError((msg) => {
+        clearInterval(iv);
+        statusEl.textContent = '服务启动失败';
+        errorBox.innerHTML = msg + '<div class="node-hint">请确保已安装 Node.js 22+：<a href="#" onclick="window.dshDesktop.openExternal(\'https://nodejs.org/\');return false;">https://nodejs.org/</a></div>';
+        errorBox.classList.add('visible');
+      });
+    }
+  </script>
+</body>
+</html>
