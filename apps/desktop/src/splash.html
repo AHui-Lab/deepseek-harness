@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek Harness</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 500px;
+      padding: 2rem;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 2rem;
+      background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: bold;
+      box-shadow: 0 8px 32px rgba(79, 195, 247, 0.3);
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.95rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #4fc3f7;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .version {
+      position: absolute;
+      bottom: 1.5rem;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 0.8rem;
+    }
+
+    .error-box {
+      display: none;
+      background: rgba(239, 83, 80, 0.15);
+      border: 1px solid rgba(239, 83, 80, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1.5rem;
+      color: #ef5350;
+      font-size: 0.85rem;
+    }
+
+    .error-box.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">DS</div>
+    <h1>DeepSeek Harness</h1>
+    <p class="subtitle">AI-powered development environment</p>
+    <div class="spinner"></div>
+    <p class="status" id="status">Starting local server...</p>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+  <div class="version" id="version"></div>
+
+  <script>
+    // Update status messages
+    const statusEl = document.getElementById('status');
+    const versionEl = document.getElementById('version');
+    const errorBox = document.getElementById('errorBox');
+
+    const messages = [
+      'Starting local server...',
+      'Loading plugins...',
+      'Initializing workspace...',
+      'Preparing UI...',
+    ];
+
+    let msgIndex = 0;
+    const msgInterval = setInterval(() => {
+      msgIndex = (msgIndex + 1) % messages.length;
+      statusEl.textContent = messages[msgIndex];
+    }, 2500);
+
+    // Listen for errors from main process
+    if (window.dshDesktop) {
+      window.dshDesktop.getAppVersion().then(v => {
+        versionEl.textContent = `v${v}`;
+      });
+
+      const unsub = window.dshDesktop.onServerError((message) => {
+        clearInterval(msgInterval);
+        statusEl.textContent = 'Server startup failed';
+        errorBox.textContent = message;
+        errorBox.classList.add('visible');
+      });
+    }
+  </script>
+</body>
+</html>
