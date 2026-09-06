@@ -22,6 +22,8 @@
       "package.json"
     ],
     "win": {
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
       "target": [
         {
           "target": "nsis",
